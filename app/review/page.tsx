@@ -18,8 +18,24 @@ export default function ReviewPage() {
   const [completed, setCompleted] = useState(false)
 
   useEffect(() => {
-    fetchTodayReviews()
+    checkAuthAndFetchReviews()
   }, [])
+
+  const checkAuthAndFetchReviews = async () => {
+    // 認証チェック
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    // 復習データを取得
+    fetchTodayReviews()
+  }
 
   const fetchTodayReviews = async () => {
     try {
