@@ -302,61 +302,26 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* クイックアクション - モバイルでは非表示（書籍一覧から操作） */}
-        <Card className="hidden sm:block order-3">
-          <CardHeader>
-            <CardTitle>クイックアクション</CardTitle>
-            <CardDescription>よく使う機能</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-4">
-            <Button
-              variant="outline"
-              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
-              onClick={() => router.push('/review')}
-            >
-              <span className="text-lg sm:text-2xl">📚</span>
-              <span>復習を始める</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
-              onClick={() => router.push('/books/new')}
-            >
-              <span className="text-lg sm:text-2xl">➕</span>
-              <span>書籍を追加</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
-              onClick={() => {
-                // 書籍一覧セクションまでスクロール
-                document.getElementById('books-section')?.scrollIntoView({ behavior: 'smooth' })
-              }}
-            >
-              <span className="text-lg sm:text-2xl">📖</span>
-              <span>書籍一覧</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
-              onClick={() => router.push('/settings/prompts')}
-            >
-              <span className="text-lg sm:text-2xl">⚙️</span>
-              <span>プロンプト設定</span>
-            </Button>
-          </CardContent>
-        </Card>
-
         {/* 書籍一覧 - モバイルでは最初に表示 */}
-        <Card id="books-section" className="order-2 sm:order-4">
+        <Card id="books-section" className="order-2 sm:order-3">
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <CardTitle className="text-lg sm:text-xl">書籍一覧</CardTitle>
               <CardDescription className="text-xs sm:text-sm">AI チューターで学習中の書籍</CardDescription>
             </div>
-            <Button onClick={() => router.push('/books/new')} size="sm" className="w-full sm:w-auto">
-              ➕ 新しい書籍を追加
-            </Button>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button onClick={() => router.push('/books/new')} size="sm" className="flex-1 sm:flex-none">
+                ➕ 書籍を追加
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/settings/prompts')}
+                className="flex-1 sm:flex-none"
+              >
+                ⚙️ 設定
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {books.length === 0 ? (
@@ -438,7 +403,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* 最近の活動 */}
-        <Card className="order-4 sm:order-5">
+        <Card className="order-4">
           <CardHeader>
             <CardTitle>最近の学習記録</CardTitle>
             <CardDescription>直近の活動履歴</CardDescription>
