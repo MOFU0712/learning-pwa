@@ -5,16 +5,19 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Book } from '@/types/database'
 
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [todayReviewCount, setTodayReviewCount] = useState<number>(0)
+  const [books, setBooks] = useState<Book[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     checkUser()
     fetchTodayReviewCount()
+    fetchBooks()
   }, [])
 
   const checkUser = async () => {
@@ -43,6 +46,32 @@ export default function DashboardPage() {
       console.error('Error fetching today review count:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchBooks = async () => {
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from('books')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching books:', error)
+        return
+      }
+
+      setBooks(data || [])
+    } catch (error) {
+      console.error('Error fetching books:', error)
     }
   }
 
@@ -161,6 +190,87 @@ export default function DashboardPage() {
               <span className="text-2xl">📖</span>
               <span>プロジェクト一覧</span>
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* 書籍一覧 */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>書籍一覧</CardTitle>
+              <CardDescription>AI チューターで学習中の書籍</CardDescription>
+            </div>
+            <Button onClick={() => router.push('/books/new')}>
+              ➕ 新しい書籍を追加
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {books.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-sm text-muted-foreground mb-4">
+                  まだ書籍がありません。PDFをアップロードして学習を始めましょう。
+                </p>
+                <Button onClick={() => router.push('/books/new')}>
+                  書籍を追加する
+                </Button>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {books.map((book) => (
+                  <Card
+                    key={book.id}
+                    className="cursor-pointer hover:shadow-lg transition-shadow"
+                    onClick={() => router.push(`/books/${book.id}/chat`)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-lg line-clamp-2">
+                            {book.title}
+                          </CardTitle>
+                          {book.author && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {book.author}
+                            </p>
+                          )}
+                        </div>
+                        <div
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            book.processing_status === 'completed'
+                              ? 'bg-green-100 text-green-700'
+                              : book.processing_status === 'processing'
+                              ? 'bg-blue-100 text-blue-700'
+                              : book.processing_status === 'failed'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {book.processing_status === 'completed'
+                            ? '完了'
+                            : book.processing_status === 'processing'
+                            ? '処理中'
+                            : book.processing_status === 'failed'
+                            ? '失敗'
+                            : '待機中'}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        {book.total_chapters && (
+                          <p>📚 {book.total_chapters} 章</p>
+                        )}
+                        {book.total_pages && <p>📄 {book.total_pages} ページ</p>}
+                        <p className="text-xs">
+                          追加日:{' '}
+                          {new Date(book.created_at).toLocaleDateString('ja-JP')}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 

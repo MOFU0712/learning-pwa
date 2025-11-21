@@ -62,3 +62,112 @@ export interface ReviewHistory {
 export interface ReviewQuestionWithHistory extends ReviewQuestion {
   last_review?: ReviewHistory
 }
+
+// ========================================
+// Learning Assistant v2.0: Books System
+// ========================================
+
+export interface Book {
+  id: string
+  user_id: string
+  title: string
+  author: string | null
+  total_pages: number | null
+  total_chapters: number | null
+  pdf_url: string | null
+  pdf_hash: string | null
+  processing_status: 'pending' | 'processing' | 'completed' | 'failed'
+  processing_error: string | null
+  is_public: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Chapter {
+  id: string
+  book_id: string
+  chapter_number: number
+  title: string
+  summary: string | null
+  created_at: string
+}
+
+export interface Section {
+  id: string
+  chapter_id: string
+  section_number: number
+  title: string
+  content: string
+  content_vector?: number[]
+  token_count: number | null
+  estimated_minutes: number | null
+  created_at: string
+}
+
+export interface ChatSession {
+  id: string
+  user_id: string
+  book_id: string
+  chapter_id: string | null
+  llm_provider: string
+  started_at: string
+  ended_at: string | null
+  duration_minutes: number | null
+  status: 'active' | 'paused' | 'completed'
+  current_topic: string | null
+  understanding_level: number | null
+  created_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  session_id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  sections_used: string[] | null
+  token_count: number | null
+  created_at: string
+}
+
+export interface UserSettings {
+  user_id: string
+  preferred_llm: 'gemini-flash' | 'claude-haiku' | 'claude-sonnet'
+  theme: 'light' | 'dark' | 'system'
+  notifications_enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+// Combined Types
+
+export interface BookWithChapters extends Book {
+  chapters: ChapterWithSections[]
+}
+
+export interface ChapterWithSections extends Chapter {
+  sections: Section[]
+}
+
+export interface ChatSessionWithMessages extends ChatSession {
+  messages: ChatMessage[]
+  book: Book
+}
+
+// API Request/Response Types
+
+export interface PDFProcessingResult {
+  title: string
+  author: string
+  totalPages: number
+  chapters: {
+    number: number
+    title: string
+    summary: string
+    sections: {
+      number: number
+      title: string
+      content: string
+      estimatedMinutes: number
+    }[]
+  }[]
+}
