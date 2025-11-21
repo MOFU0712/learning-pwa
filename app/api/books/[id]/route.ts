@@ -99,11 +99,12 @@ export async function DELETE(
     // 書籍の所有権確認
     const { data: book, error: bookError } = await supabase
       .from('books')
-      .select('id, user_id, pdf_storage_path')
+      .select('id, user_id, pdf_url')
       .eq('id', id)
       .single();
 
     if (bookError || !book) {
+      console.error('Book fetch error:', bookError);
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
     }
 
@@ -112,14 +113,25 @@ export async function DELETE(
     }
 
     // PDFファイルをストレージから削除
-    if (book.pdf_storage_path) {
-      const { error: storageError } = await supabase.storage
-        .from('books')
-        .remove([book.pdf_storage_path]);
+    // pdf_url から storage path を抽出（例: /storage/v1/object/public/pdfs/user-id/file.pdf -> user-id/file.pdf）
+    if (book.pdf_url) {
+      try {
+        const url = new URL(book.pdf_url);
+        const pathMatch = url.pathname.match(/\/storage\/v1\/object\/(?:public|sign)\/pdfs\/(.+)/);
+        if (pathMatch) {
+          const storagePath = pathMatch[1];
+          const { error: storageError } = await supabase.storage
+            .from('pdfs')
+            .remove([storagePath]);
 
-      if (storageError) {
-        console.error('Failed to delete PDF from storage:', storageError);
-        // ストレージ削除に失敗してもDB削除は続行
+          if (storageError) {
+            console.error('Failed to delete PDF from storage:', storageError);
+            // ストレージ削除に失敗してもDB削除は続行
+          }
+        }
+      } catch (urlError) {
+        console.error('Failed to parse PDF URL:', urlError);
+        // URL解析に失敗してもDB削除は続行
       }
     }
 

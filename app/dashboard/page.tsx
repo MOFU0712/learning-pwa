@@ -106,6 +106,7 @@ export default function DashboardPage() {
       if (!user) return
 
       // 最近のチャットセッションを取得（書籍情報も含む）
+      // updated_at がない場合は created_at でフォールバック
       const { data, error } = await supabase
         .from('chat_sessions')
         .select(`
@@ -114,12 +115,11 @@ export default function DashboardPage() {
           progress_status,
           current_topic,
           created_at,
-          updated_at,
           books (title)
         `)
         .eq('user_id', user.id)
         .not('book_id', 'is', null)
-        .order('updated_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(5)
 
       if (error) {
@@ -134,7 +134,7 @@ export default function DashboardPage() {
         progress_status: s.progress_status,
         current_topic: s.current_topic,
         created_at: s.created_at,
-        updated_at: s.updated_at,
+        updated_at: s.created_at, // フォールバック
       }))
 
       setRecentSessions(sessions)
