@@ -31,7 +31,6 @@ export default function DashboardPage() {
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
   const [stats, setStats] = useState<LearningStats>({ totalTopics: 0, learningDays: 0, totalSessions: 0 })
   const [loading, setLoading] = useState(true)
-  const [deletingBookId, setDeletingBookId] = useState<string | null>(null)
 
   useEffect(() => {
     checkUser()
@@ -195,36 +194,6 @@ export default function DashboardPage() {
     router.refresh()
   }
 
-  const handleDeleteBook = async (bookId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // カードのクリックイベントを停止
-
-    if (!confirm('この書籍を削除してもよろしいですか？\n関連するチャット履歴や復習問題も全て削除されます。')) {
-      return
-    }
-
-    setDeletingBookId(bookId)
-    try {
-      const response = await fetch(`/api/books/${bookId}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        // 書籍一覧を更新
-        setBooks(books.filter((book) => book.id !== bookId))
-        // 最近のセッションも更新
-        setRecentSessions(recentSessions.filter((session) => session.book_id !== bookId))
-      } else {
-        const data = await response.json()
-        alert(`削除に失敗しました: ${data.error || 'エラーが発生しました'}`)
-      }
-    } catch (error) {
-      console.error('Error deleting book:', error)
-      alert('削除中にエラーが発生しました')
-    } finally {
-      setDeletingBookId(null)
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -316,7 +285,7 @@ export default function DashboardPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => router.push('/settings/prompts')}
+                onClick={() => router.push('/settings')}
                 className="flex-1 sm:flex-none"
               >
                 ⚙️ 設定
@@ -385,15 +354,6 @@ export default function DashboardPage() {
                           {new Date(book.created_at).toLocaleDateString('ja-JP')}
                         </p>
                       </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="w-full mt-4"
-                        onClick={(e) => handleDeleteBook(book.id, e)}
-                        disabled={deletingBookId === book.id}
-                      >
-                        {deletingBookId === book.id ? '削除中...' : '削除'}
-                      </Button>
                     </CardContent>
                   </Card>
                 ))}
