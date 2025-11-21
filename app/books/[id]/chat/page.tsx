@@ -31,6 +31,8 @@ export default function ChatPage() {
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isEndingSession, setIsEndingSession] = useState(false);
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -195,6 +197,44 @@ export default function ChatPage() {
     }
   };
 
+  const handleEndSession = async () => {
+    if (!sessionId || isEndingSession) return;
+
+    setIsEndingSession(true);
+    try {
+      const response = await fetch('/api/chat/end-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          bookId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to end session');
+      }
+
+      // 成功時: モーダルを閉じて結果を表示
+      setShowEndSessionModal(false);
+      alert(`セッションを終了しました。\n${data.questionsCount}問の復習問題を生成しました。\n\n復習ページで確認できます。`);
+
+      // 新しいセッションを開始するためにリセット
+      setSessionId(null);
+      setState((prev) => ({
+        ...prev,
+        messages: [],
+      }));
+    } catch (error) {
+      console.error('Error ending session:', error);
+      alert(error instanceof Error ? error.message : 'セッションの終了に失敗しました');
+    } finally {
+      setIsEndingSession(false);
+    }
+  };
+
   if (state.isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -234,7 +274,7 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* 章選択 */}
+          {/* 章選択とセッション終了 */}
           <div className="flex items-center gap-4">
             <select
               value={state.selectedChapterId || ''}
@@ -250,6 +290,16 @@ export default function ChatPage() {
                 </option>
               ))}
             </select>
+
+            {/* セッション終了ボタン */}
+            {sessionId && state.messages.length >= 2 && (
+              <button
+                onClick={() => setShowEndSessionModal(true)}
+                className="px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors font-medium"
+              >
+                学習を終了
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -325,6 +375,37 @@ export default function ChatPage() {
           </button>
         </div>
       </div>
+
+      {/* セッション終了確認モーダル */}
+      {showEndSessionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              学習セッションを終了しますか？
+            </h3>
+            <p className="text-gray-600 mb-6">
+              セッションを終了すると、この学習内容から復習問題が自動生成されます。
+              生成された問題は復習ページで確認・学習できます。
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowEndSessionModal(false)}
+                disabled={isEndingSession}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleEndSession}
+                disabled={isEndingSession}
+                className="px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 disabled:bg-gray-300 transition-colors"
+              >
+                {isEndingSession ? '生成中...' : '終了して復習問題を生成'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
