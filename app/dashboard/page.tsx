@@ -7,17 +7,37 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Book } from '@/types/database'
 
+interface RecentSession {
+  id: string
+  book_id: string
+  book_title: string
+  progress_status: string | null
+  current_topic: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface LearningStats {
+  totalTopics: number
+  learningDays: number
+  totalSessions: number
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [todayReviewCount, setTodayReviewCount] = useState<number>(0)
   const [books, setBooks] = useState<Book[]>([])
+  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
+  const [stats, setStats] = useState<LearningStats>({ totalTopics: 0, learningDays: 0, totalSessions: 0 })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     checkUser()
     fetchTodayReviewCount()
     fetchBooks()
+    fetchRecentSessions()
+    fetchLearningStats()
   }, [])
 
   const checkUser = async () => {
@@ -72,6 +92,97 @@ export default function DashboardPage() {
       setBooks(data || [])
     } catch (error) {
       console.error('Error fetching books:', error)
+    }
+  }
+
+  const fetchRecentSessions = async () => {
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      // 最近のチャットセッションを取得（書籍情報も含む）
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .select(`
+          id,
+          book_id,
+          progress_status,
+          current_topic,
+          created_at,
+          updated_at,
+          books (title)
+        `)
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(5)
+
+      if (error) {
+        console.error('Error fetching recent sessions:', error)
+        return
+      }
+
+      const sessions: RecentSession[] = (data || []).map((s: any) => ({
+        id: s.id,
+        book_id: s.book_id,
+        book_title: s.books?.title || '不明な書籍',
+        progress_status: s.progress_status,
+        current_topic: s.current_topic,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+      }))
+
+      setRecentSessions(sessions)
+    } catch (error) {
+      console.error('Error fetching recent sessions:', error)
+    }
+  }
+
+  const fetchLearningStats = async () => {
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) return
+
+      // 完了したトピック数を計算（progress_statusから抽出）
+      const { data: sessions } = await supabase
+        .from('chat_sessions')
+        .select('progress_status, created_at')
+        .eq('user_id', user.id)
+
+      let totalTopics = 0
+      const learningDates = new Set<string>()
+
+      sessions?.forEach((s) => {
+        // progress_status が "3/10" のような形式の場合、最初の数字を取得
+        if (s.progress_status) {
+          const match = s.progress_status.match(/^(\d+)/)
+          if (match) {
+            totalTopics = Math.max(totalTopics, parseInt(match[1], 10))
+          }
+        }
+        // 学習した日をカウント
+        if (s.created_at) {
+          learningDates.add(s.created_at.split('T')[0])
+        }
+      })
+
+      // セッション総数
+      const totalSessions = sessions?.length || 0
+
+      setStats({
+        totalTopics,
+        learningDays: learningDates.size,
+        totalSessions,
+      })
+    } catch (error) {
+      console.error('Error fetching learning stats:', error)
     }
   }
 
@@ -134,26 +245,26 @@ export default function DashboardPage() {
 
           <Card className="md:col-span-1">
             <CardHeader>
-              <CardTitle>学習時間</CardTitle>
-              <CardDescription>今週の合計</CardDescription>
+              <CardTitle>学習トピック</CardTitle>
+              <CardDescription>これまでに学習したトピック</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold">0時間</div>
+              <div className="text-4xl font-bold">{stats.totalTopics}個</div>
               <p className="text-sm text-muted-foreground mt-4">
-                データがありません
+                {stats.totalSessions}回のセッション
               </p>
             </CardContent>
           </Card>
 
           <Card className="md:col-span-1">
             <CardHeader>
-              <CardTitle>学習ストリーク</CardTitle>
-              <CardDescription>連続学習日数</CardDescription>
+              <CardTitle>学習日数</CardTitle>
+              <CardDescription>学習した日数</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold">0日</div>
+              <div className="text-4xl font-bold">{stats.learningDays}日</div>
               <p className="text-sm text-muted-foreground mt-4">
-                データがありません
+                {stats.learningDays > 0 ? '継続して学習しましょう！' : '今日から始めましょう！'}
               </p>
             </CardContent>
           </Card>
@@ -177,18 +288,21 @@ export default function DashboardPage() {
             <Button
               variant="outline"
               className="h-24 flex flex-col gap-2"
-              onClick={() => router.push('/sessions/new')}
+              onClick={() => router.push('/books/new')}
             >
               <span className="text-2xl">➕</span>
-              <span>学習記録を追加</span>
+              <span>書籍を追加</span>
             </Button>
             <Button
               variant="outline"
               className="h-24 flex flex-col gap-2"
-              onClick={() => router.push('/projects')}
+              onClick={() => {
+                // 書籍一覧セクションまでスクロール
+                document.getElementById('books-section')?.scrollIntoView({ behavior: 'smooth' })
+              }}
             >
               <span className="text-2xl">📖</span>
-              <span>プロジェクト一覧</span>
+              <span>書籍一覧</span>
             </Button>
             <Button
               variant="outline"
@@ -202,7 +316,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* 書籍一覧 */}
-        <Card>
+        <Card id="books-section">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>書籍一覧</CardTitle>
@@ -289,9 +403,43 @@ export default function DashboardPage() {
             <CardDescription>直近の活動履歴</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-8">
-              まだ学習記録がありません。JSONファイルを取り込んで始めましょう。
-            </p>
+            {recentSessions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                まだ学習記録がありません。書籍を追加して学習を始めましょう。
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {recentSessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 cursor-pointer transition-colors"
+                    onClick={() => router.push(`/books/${session.book_id}/chat?sessionId=${session.id}`)}
+                  >
+                    <div className="flex-1">
+                      <h4 className="font-medium">{session.book_title}</h4>
+                      {session.current_topic && (
+                        <p className="text-sm text-muted-foreground line-clamp-1">
+                          {session.current_topic}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(session.updated_at).toLocaleDateString('ja-JP', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    {session.progress_status && (
+                      <div className="ml-4 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+                        {session.progress_status}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
