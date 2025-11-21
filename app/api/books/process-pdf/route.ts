@@ -57,115 +57,129 @@ export async function POST(request: NextRequest) {
     const pdfBuffer = await pdfBlob.arrayBuffer();
     const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
 
-    // PDF解析プロンプト
-    const analysisPrompt = `
-あなたはPDF学習教材の構造解析の専門家です。以下のPDFを解析し、学習に最適な形で章とセクションに分割してください。
+    console.log('Step 1: Extracting table of contents...');
 
-【解析要件】
-1. PDFから最初の3章のみを抽出（トークン制限のため）
-   - 章番号と章タイトルを識別
-   - 各章の概要（summary）を100文字程度で簡潔に作成
+    // Step 1: 目次を抽出して章のリストを取得
+    const tocPrompt = `
+以下のPDFから目次（Table of Contents）を抽出してください。
 
-2. 各章を最大3セクションに分割
-   - 1セクション = 5-10分で学習できる単位（800-1500文字程度）
-   - セクションごとに簡潔なタイトルをつける
-   - セクションの本文（content）を抽出（重要な部分のみ）
-   - 推定学習時間（分）を計算
-
-3. **必ず完全なJSONを出力してください**
-   - 途中で切れないように注意
-   - 最後の } まで必ず出力
-   - JSON以外の説明文は一切出力しない
-
-出力JSONフォーマット：
+出力は以下のJSON形式のみ：
 {
   "title": "書籍タイトル",
   "author": "著者名",
   "totalPages": ページ数,
   "chapters": [
-    {
-      "number": 1,
-      "title": "章タイトル",
-      "summary": "100文字以内の概要",
-      "sections": [
-        {
-          "number": 1,
-          "title": "セクションタイトル",
-          "content": "本文（800-1500文字）",
-          "estimatedMinutes": 7
-        }
-      ]
-    }
+    {"number": 1, "title": "章タイトル"},
+    {"number": 2, "title": "章タイトル"}
   ]
 }
 
-**重要**: JSONを途中で切らずに、必ず最後まで完成させてください。`;
+JSON以外は一切出力しないでください。`;
 
-    console.log('Starting PDF analysis with Gemini...');
-
-    // Gemini Flash 2.0でPDF解析
-    const model = genAI.getGenerativeModel({
+    const tocModel = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash-exp',
       generationConfig: {
-        maxOutputTokens: 8192, // 出力トークン数を増やす
-        temperature: 0.1, // より決定的な出力
-        responseMimeType: 'application/json', // JSON出力を指定
+        maxOutputTokens: 2048,
+        temperature: 0.1,
+        responseMimeType: 'application/json',
       },
     });
 
-    const result = await model.generateContent([
+    const tocResult = await tocModel.generateContent([
       {
         inlineData: {
           mimeType: 'application/pdf',
           data: pdfBase64,
         },
       },
-      { text: analysisPrompt },
+      { text: tocPrompt },
     ]);
 
-    const responseText = result.response.text();
-    console.log('Gemini response received, parsing JSON...');
-    console.log('Response preview:', responseText.substring(0, 500));
+    const tocText = tocResult.response.text();
+    console.log('TOC extracted:', tocText.substring(0, 300));
 
-    // JSONをパース（```json ... ```をトリム）
-    let jsonText = responseText.trim();
+    const tocData = JSON.parse(tocText);
+    const bookTitle = tocData.title || title;
+    const bookAuthor = tocData.author || author;
+    const totalPages = tocData.totalPages || null;
+    const chaptersList = tocData.chapters || [];
 
-    // コードブロックを削除
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.substring(7);
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.substring(3);
+    console.log(`Found ${chaptersList.length} chapters`);
+
+    // Step 2: 各章を個別に処理
+    const processedChapters = [];
+    const chapterModel = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash-exp',
+      generationConfig: {
+        maxOutputTokens: 4096,
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+      },
+    });
+
+    for (let i = 0; i < Math.min(chaptersList.length, 5); i++) {
+      // 最初の5章のみ処理
+      const chapter = chaptersList[i];
+      console.log(`Processing chapter ${chapter.number}: ${chapter.title}`);
+
+      const chapterPrompt = `
+以下のPDFから「第${chapter.number}章: ${chapter.title}」の内容を抽出し、セクションに分割してください。
+
+出力JSON形式：
+{
+  "number": ${chapter.number},
+  "title": "${chapter.title}",
+  "summary": "この章の概要（100文字以内）",
+  "sections": [
+    {
+      "number": 1,
+      "title": "セクションタイトル",
+      "content": "セクションの本文（重要な内容を1000文字程度で）",
+      "estimatedMinutes": 推定学習時間
+    }
+  ]
+}
+
+- 最大5セクションまで
+- 重要な内容を優先
+- JSON以外は出力しない`;
+
+      try {
+        const chapterResult = await chapterModel.generateContent([
+          {
+            inlineData: {
+              mimeType: 'application/pdf',
+              data: pdfBase64,
+            },
+          },
+          { text: chapterPrompt },
+        ]);
+
+        const chapterText = chapterResult.response.text();
+        const chapterData = JSON.parse(chapterText);
+        processedChapters.push(chapterData);
+        console.log(`  → Extracted ${chapterData.sections?.length || 0} sections`);
+      } catch (error) {
+        console.error(`Failed to process chapter ${chapter.number}:`, error);
+        // エラーが起きても続行
+        processedChapters.push({
+          number: chapter.number,
+          title: chapter.title,
+          summary: '処理に失敗しました',
+          sections: [],
+        });
+      }
     }
 
-    if (jsonText.endsWith('```')) {
-      jsonText = jsonText.substring(0, jsonText.length - 3);
-    }
-
-    jsonText = jsonText.trim();
-
-    // JSONの開始と終了を探す
-    const jsonStart = jsonText.indexOf('{');
-    const jsonEnd = jsonText.lastIndexOf('}');
-
-    if (jsonStart === -1 || jsonEnd === -1) {
-      console.error('Invalid JSON format - no braces found');
-      console.error('Response text:', responseText);
-      throw new Error('Invalid JSON format in Gemini response');
-    }
-
-    jsonText = jsonText.substring(jsonStart, jsonEnd + 1);
-
-    let pdfData: PDFProcessingResult;
-    try {
-      pdfData = JSON.parse(jsonText);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Attempted to parse:', jsonText.substring(0, 1000));
-      throw new Error('Failed to parse Gemini response as JSON');
-    }
+    const pdfData: PDFProcessingResult = {
+      title: bookTitle,
+      author: bookAuthor,
+      totalPages: totalPages,
+      chapters: processedChapters,
+    };
 
     console.log(
-      `Parsed PDF: ${pdfData.chapters.length} chapters, ${pdfData.chapters.reduce((sum, ch) => sum + ch.sections.length, 0)} sections`
+      `Processed ${pdfData.chapters.length} chapters, ${pdfData.chapters.reduce((sum, ch) => sum + ch.sections.length, 0)} sections total`
     );
 
     // データベースに保存開始
