@@ -15,7 +15,11 @@ export class GeminiProvider implements LLMProvider {
 
     this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
     this.model = this.genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp'
+      model: 'gemini-2.0-flash-exp',
+      generationConfig: {
+        maxOutputTokens: 8192,
+        temperature: 0.7,
+      },
     });
   }
 
