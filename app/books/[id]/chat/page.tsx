@@ -33,6 +33,7 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [showEndSessionModal, setShowEndSessionModal] = useState(false);
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -197,6 +198,39 @@ export default function ChatPage() {
     }
   };
 
+  const handleClearHistory = async () => {
+    if (!sessionId || isClearingHistory) return;
+
+    if (!confirm('チャット履歴をクリアしますか？この操作は取り消せません。')) {
+      return;
+    }
+
+    setIsClearingHistory(true);
+    try {
+      const response = await fetch('/api/chat/clear-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear history');
+      }
+
+      // UIをリセット
+      setSessionId(null);
+      setState((prev) => ({
+        ...prev,
+        messages: [],
+      }));
+    } catch (error) {
+      console.error('Error clearing history:', error);
+      alert('履歴のクリアに失敗しました');
+    } finally {
+      setIsClearingHistory(false);
+    }
+  };
+
   const handleEndSession = async () => {
     if (!sessionId || isEndingSession) return;
 
@@ -290,6 +324,17 @@ export default function ChatPage() {
                 </option>
               ))}
             </select>
+
+            {/* 履歴クリアボタン */}
+            {sessionId && state.messages.length > 0 && (
+              <button
+                onClick={handleClearHistory}
+                disabled={isClearingHistory}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+              >
+                {isClearingHistory ? 'クリア中...' : '履歴クリア'}
+              </button>
+            )}
 
             {/* セッション終了ボタン */}
             {sessionId && state.messages.length >= 2 && (
