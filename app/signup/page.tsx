@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -17,11 +17,7 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    checkIfAlreadyLoggedIn()
-  }, [])
-
-  const checkIfAlreadyLoggedIn = async () => {
+  const checkIfAlreadyLoggedIn = useCallback(async () => {
     const supabase = createClient()
     const {
       data: { user },
@@ -30,7 +26,11 @@ export default function SignupPage() {
     if (user) {
       router.push('/dashboard')
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    checkIfAlreadyLoggedIn()
+  }, [checkIfAlreadyLoggedIn])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
