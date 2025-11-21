@@ -152,19 +152,28 @@ ${contextText || '（コンテキストが見つかりませんでした。一�
       content: promptContent,
     };
 
-    // 過去の会話履歴を取得（最新10件まで）
+    // 過去の会話履歴を取得（今回のメッセージは除外、最新20件まで）
+    // 注意: 上でユーザーメッセージを既に保存しているので、それを除外する
     const { data: chatHistory } = await supabase
       .from('chat_messages')
       .select('role, content')
       .eq('session_id', currentSessionId)
+      .neq('content', message) // 今回のメッセージを除外
       .order('created_at', { ascending: true })
-      .limit(10);
+      .limit(20);
 
-    // 会話履歴をMessage形式に変換
-    const historyMessages: Message[] = (chatHistory || []).map((msg) => ({
+    // 会話履歴をMessage形式に変換（最後のメッセージが今回のと同じなら除外）
+    let historyMessages: Message[] = (chatHistory || []).map((msg) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }));
+
+    // 安全のため、最後のメッセージが今回のユーザーメッセージと同じなら除外
+    if (historyMessages.length > 0 &&
+        historyMessages[historyMessages.length - 1].role === 'user' &&
+        historyMessages[historyMessages.length - 1].content === message) {
+      historyMessages = historyMessages.slice(0, -1);
+    }
 
     const userMessage: Message = {
       role: 'user',
