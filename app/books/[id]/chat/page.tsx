@@ -56,8 +56,14 @@ export default function ChatPage() {
         ...prev,
         book: data.book,
         chapters: data.chapters,
+        messages: data.messages || [],
         isLoading: false,
       }));
+
+      // 既存のセッションIDを設定
+      if (data.sessionId) {
+        setSessionId(data.sessionId);
+      }
     } catch (error) {
       console.error('Error fetching book data:', error);
       setState((prev) => ({

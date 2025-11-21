@@ -41,9 +41,33 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch chapters' }, { status: 500 });
     }
 
+    // 最新のアクティブなセッションとメッセージを取得
+    const { data: latestSession } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('book_id', bookId)
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    let messages: any[] = [];
+    if (latestSession) {
+      const { data: sessionMessages } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', latestSession.id)
+        .order('created_at', { ascending: true });
+
+      messages = sessionMessages || [];
+    }
+
     return NextResponse.json({
       book,
       chapters: chapters || [],
+      sessionId: latestSession?.id || null,
+      messages,
     });
   } catch (error) {
     console.error('API error:', error);
