@@ -152,6 +152,20 @@ ${contextText || '（コンテキストが見つかりませんでした。一�
       content: promptContent,
     };
 
+    // 過去の会話履歴を取得（最新10件まで）
+    const { data: chatHistory } = await supabase
+      .from('chat_messages')
+      .select('role, content')
+      .eq('session_id', currentSessionId)
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    // 会話履歴をMessage形式に変換
+    const historyMessages: Message[] = (chatHistory || []).map((msg) => ({
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content,
+    }));
+
     const userMessage: Message = {
       role: 'user',
       content: message,
@@ -160,6 +174,7 @@ ${contextText || '（コンテキストが見つかりませんでした。一�
     // LLMストリーミングレスポンス
     const llmProvider = createDefaultLLMProvider();
     console.log(`Using LLM provider: ${llmProvider.name}`);
+    console.log(`Chat history: ${historyMessages.length} messages`);
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -173,9 +188,10 @@ ${contextText || '（コンテキストが見つかりませんでした。一�
 
           let fullResponse = '';
 
-          // LLMからストリーミング取得
+          // LLMからストリーミング取得（システム + 履歴 + 新規メッセージ）
           for await (const chunk of llmProvider.generateStream([
             systemMessage,
+            ...historyMessages,
             userMessage,
           ])) {
             fullResponse += chunk;
