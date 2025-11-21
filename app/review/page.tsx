@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -17,11 +17,7 @@ export default function ReviewPage() {
   const [submitting, setSubmitting] = useState(false)
   const [completed, setCompleted] = useState(false)
 
-  useEffect(() => {
-    checkAuthAndFetchReviews()
-  }, [])
-
-  const checkAuthAndFetchReviews = async () => {
+  const checkAuthAndFetchReviews = useCallback(async () => {
     // 認証チェック
     const supabase = createClient()
     const {
@@ -34,8 +30,12 @@ export default function ReviewPage() {
     }
 
     // 復習データを取得
-    fetchTodayReviews()
-  }
+    await fetchTodayReviews()
+  }, [router])
+
+  useEffect(() => {
+    checkAuthAndFetchReviews()
+  }, [checkAuthAndFetchReviews])
 
   const fetchTodayReviews = async () => {
     try {

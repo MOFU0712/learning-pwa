@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -14,11 +14,7 @@ export default function NewSessionPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    checkAuth()
-  }, [])
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     const supabase = createClient()
     const {
       data: { user },
@@ -27,7 +23,11 @@ export default function NewSessionPage() {
     if (!user) {
       router.push('/login')
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
 
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault()

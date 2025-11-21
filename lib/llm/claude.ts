@@ -36,7 +36,7 @@ export class ClaudeProvider implements LLMProvider {
       max_tokens: 4096,
       system: systemMessage?.content,
       messages: chatMessages.map(msg => ({
-        role: msg.role,
+        role: msg.role as 'user' | 'assistant',
         content: msg.content,
       })),
     });
@@ -60,7 +60,7 @@ export class ClaudeProvider implements LLMProvider {
       max_tokens: 4096,
       system: systemMessage?.content,
       messages: chatMessages.map(msg => ({
-        role: msg.role,
+        role: msg.role as 'user' | 'assistant',
         content: msg.content,
       })),
     });
