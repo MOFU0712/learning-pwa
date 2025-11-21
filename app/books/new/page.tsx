@@ -1,8 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+
+interface ChapterInfo {
+  number: number;
+  title: string;
+}
 
 export default function NewBookPage() {
   const router = useRouter();
@@ -13,6 +18,12 @@ export default function NewBookPage() {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+
+  // 処理進捗状態
+  const [processingStatus, setProcessingStatus] = useState<string>('');
+  const [processedChapters, setProcessedChapters] = useState(0);
+  const [totalChapters, setTotalChapters] = useState(0);
+  const fileNameRef = useRef<string>('');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -60,12 +71,14 @@ export default function NewBookPage() {
         throw new Error('ログインが必要です');
       }
 
+      setProcessingStatus('PDFをアップロード中...');
+
       // 1. PDFをSupabase Storageにアップロード
-      // ファイル名をサニタイズ（日本語などの非ASCII文字を除去）
       const sanitizedFileName = pdfFile.name
-        .replace(/[^a-zA-Z0-9.-]/g, '_') // 非ASCII文字をアンダースコアに
-        .replace(/_{2,}/g, '_'); // 連続するアンダースコアを1つに
+        .replace(/[^a-zA-Z0-9.-]/g, '_')
+        .replace(/_{2,}/g, '_');
       const fileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
+      fileNameRef.current = fileName;
 
       const { error: uploadError } = await supabase.storage
         .from('pdfs')
@@ -83,12 +96,12 @@ export default function NewBookPage() {
         data: { publicUrl },
       } = supabase.storage.from('pdfs').getPublicUrl(fileName);
 
-      // 3. PDF処理APIを呼び出し（URLのみ送信）
+      setProcessingStatus('目次を解析中...');
+
+      // 3. PDF処理API（目次抽出＋Book作成）
       const response = await fetch('/api/books/process-pdf', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
           author,
@@ -99,16 +112,48 @@ export default function NewBookPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        const errorMsg = errorData.details
-          ? `${errorData.error}: ${errorData.details}`
-          : errorData.error || 'アップロードに失敗しました';
-        throw new Error(errorMsg);
+        throw new Error(errorData.details || errorData.error || '処理に失敗しました');
       }
 
       const result = await response.json();
+      const { bookId, chapters } = result as { bookId: string; chapters: ChapterInfo[] };
 
-      // 処理完了後、書籍詳細ページへリダイレクト
-      router.push(`/books/${result.bookId}`);
+      setTotalChapters(chapters.length);
+      setProcessedChapters(0);
+
+      // 4. 章ごとに処理（順番に実行）
+      for (let i = 0; i < chapters.length; i++) {
+        const chapter = chapters[i];
+        setProcessingStatus(`第${chapter.number}章を処理中... (${i + 1}/${chapters.length})`);
+
+        try {
+          const chapterResponse = await fetch('/api/books/process-chapter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookId,
+              chapterNumber: chapter.number,
+              chapterTitle: chapter.title,
+              fileName,
+            }),
+          });
+
+          if (!chapterResponse.ok) {
+            console.error(`Chapter ${chapter.number} failed`);
+            // エラーでも続行
+          }
+
+          setProcessedChapters(i + 1);
+        } catch (chapterError) {
+          console.error(`Chapter ${chapter.number} error:`, chapterError);
+          // エラーでも続行
+        }
+      }
+
+      setProcessingStatus('処理完了！リダイレクト中...');
+
+      // 処理完了後、チャットページへリダイレクト
+      router.push(`/books/${bookId}/chat`);
     } catch (err) {
       console.error('Book upload error:', err);
       setError(err instanceof Error ? err.message : 'アップロードに失敗しました');
@@ -234,9 +279,21 @@ export default function NewBookPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <div>
-                    <p className="font-medium">PDFを処理中...</p>
-                    <p className="text-sm">Gemini AIがPDFを解析し、章立てとセクション分割を行っています。数分かかる場合があります。</p>
+                  <div className="flex-1">
+                    <p className="font-medium">{processingStatus || 'PDFを処理中...'}</p>
+                    {totalChapters > 0 && (
+                      <>
+                        <p className="text-sm mt-1">
+                          進捗: {processedChapters} / {totalChapters} 章
+                        </p>
+                        <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${(processedChapters / totalChapters) * 100}%` }}
+                          ></div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

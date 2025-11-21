@@ -78,6 +78,8 @@ export interface Book {
   pdf_hash: string | null
   processing_status: 'pending' | 'processing' | 'completed' | 'failed'
   processing_error: string | null
+  processed_chapters: number | null
+  chapters_data: { number: number; title: string }[] | null
   is_public: boolean
   created_at: string
   updated_at: string
@@ -95,7 +97,7 @@ export interface Chapter {
 export interface Section {
   id: string
   chapter_id: string
-  section_number: number
+  section_number: string  // "1.1", "1.1.1" など階層的な番号をサポート
   title: string
   content: string
   content_vector?: number[]

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { generateEmbeddings, estimateTokenCount } from '@/lib/embeddings';
-import type { PDFProcessingResult } from '@/types/database';
 
-// Route Segment Config: 最大実行時間とボディサイズ制限
-export const maxDuration = 300; // 5分（Vercel Pro以上で必要）
+// Route Segment Config
+export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 // Gemini APIクライアント
@@ -37,7 +35,6 @@ export async function POST(request: NextRequest) {
     console.log('Downloading PDF from Supabase Storage...', { fileName });
 
     // Supabase StorageからPDFをダウンロード
-    // 注意: サーバー側なのでRLSをバイパスできる
     const { data: pdfBlob, error: downloadError } = await supabase.storage
       .from('pdfs')
       .download(fileName);
@@ -59,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Step 1: Extracting table of contents...');
 
-    // Step 1: 目次を抽出して章のリストを取得
+    // 目次を抽出して章のリストを取得
     const tocPrompt = `
 以下のPDFから目次（Table of Contents）を抽出してください。
 
@@ -74,12 +71,12 @@ export async function POST(request: NextRequest) {
   ]
 }
 
-JSON以外は一切出力しないでください。`;
+全ての章を含めてください。JSON以外は一切出力しないでください。`;
 
     const tocModel = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash-exp',
       generationConfig: {
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
         temperature: 0.1,
         responseMimeType: 'application/json',
       },
@@ -96,7 +93,7 @@ JSON以外は一切出力しないでください。`;
     ]);
 
     const tocText = tocResult.response.text();
-    console.log('TOC extracted:', tocText.substring(0, 300));
+    console.log('TOC extracted:', tocText.substring(0, 500));
 
     const tocData = JSON.parse(tocText);
     const bookTitle = tocData.title || title;
@@ -106,96 +103,19 @@ JSON以外は一切出力しないでください。`;
 
     console.log(`Found ${chaptersList.length} chapters`);
 
-    // Step 2: 各章を個別に処理
-    const processedChapters = [];
-    const chapterModel = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp',
-      generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: 0.1,
-        responseMimeType: 'application/json',
-      },
-    });
-
-    for (let i = 0; i < Math.min(chaptersList.length, 5); i++) {
-      // 最初の5章のみ処理
-      const chapter = chaptersList[i];
-      console.log(`Processing chapter ${chapter.number}: ${chapter.title}`);
-
-      const chapterPrompt = `
-以下のPDFから「第${chapter.number}章: ${chapter.title}」の内容を抽出し、セクションに分割してください。
-
-出力JSON形式：
-{
-  "number": ${chapter.number},
-  "title": "${chapter.title}",
-  "summary": "この章の概要（100文字以内）",
-  "sections": [
-    {
-      "number": 1,
-      "title": "セクションタイトル",
-      "content": "セクションの本文（重要な内容を1000文字程度で）",
-      "estimatedMinutes": 推定学習時間
-    }
-  ]
-}
-
-- 最大5セクションまで
-- 重要な内容を優先
-- JSON以外は出力しない`;
-
-      try {
-        const chapterResult = await chapterModel.generateContent([
-          {
-            inlineData: {
-              mimeType: 'application/pdf',
-              data: pdfBase64,
-            },
-          },
-          { text: chapterPrompt },
-        ]);
-
-        const chapterText = chapterResult.response.text();
-        const chapterData = JSON.parse(chapterText);
-        processedChapters.push(chapterData);
-        console.log(`  → Extracted ${chapterData.sections?.length || 0} sections`);
-      } catch (error) {
-        console.error(`Failed to process chapter ${chapter.number}:`, error);
-        // エラーが起きても続行
-        processedChapters.push({
-          number: chapter.number,
-          title: chapter.title,
-          summary: '処理に失敗しました',
-          sections: [],
-        });
-      }
-    }
-
-    const pdfData: PDFProcessingResult = {
-      title: bookTitle,
-      author: bookAuthor,
-      totalPages: totalPages,
-      chapters: processedChapters,
-    };
-
-    console.log(
-      `Processed ${pdfData.chapters.length} chapters, ${pdfData.chapters.reduce((sum, ch) => sum + ch.sections.length, 0)} sections total`
-    );
-
-    // データベースに保存開始
-    console.log('Saving to database...');
-
-    // 1. Bookレコード作成
+    // Bookレコード作成（processing状態）
     const { data: book, error: bookError } = await supabase
       .from('books')
       .insert({
         user_id: user.id,
-        title: pdfData.title || title,
-        author: pdfData.author || author || null,
-        total_pages: pdfData.totalPages || null,
-        total_chapters: pdfData.chapters.length,
+        title: bookTitle,
+        author: bookAuthor || null,
+        total_pages: totalPages,
+        total_chapters: chaptersList.length,
         pdf_url: pdfUrl,
         processing_status: 'processing',
+        processed_chapters: 0,
+        chapters_data: chaptersList, // 章リストをJSONで保存
       })
       .select()
       .single();
@@ -207,73 +127,13 @@ JSON以外は一切出力しないでください。`;
 
     console.log(`Book created: ${book.id}`);
 
-    // 2. Chapters & Sections作成 + Embeddings生成
-    for (const chapterData of pdfData.chapters) {
-      // Chapterレコード作成
-      const { data: chapter, error: chapterError } = await supabase
-        .from('chapters')
-        .insert({
-          book_id: book.id,
-          chapter_number: chapterData.number,
-          title: chapterData.title,
-          summary: chapterData.summary,
-        })
-        .select()
-        .single();
-
-      if (chapterError || !chapter) {
-        console.error('Chapter creation error:', chapterError);
-        continue;
-      }
-
-      console.log(
-        `  Chapter ${chapter.chapter_number}: ${chapterData.sections.length} sections`
-      );
-
-      // Sectionsの本文を収集（一括embedding生成用）
-      const sectionContents = chapterData.sections.map((s) => s.content);
-
-      // Embeddings一括生成
-      console.log(`  Generating embeddings for ${sectionContents.length} sections...`);
-      const embeddings = await generateEmbeddings(sectionContents);
-
-      // Sectionsレコード作成
-      for (let i = 0; i < chapterData.sections.length; i++) {
-        const sectionData = chapterData.sections[i];
-        const embedding = embeddings[i];
-
-        const { error: sectionError } = await supabase.from('sections').insert({
-          chapter_id: chapter.id,
-          section_number: sectionData.number,
-          title: sectionData.title,
-          content: sectionData.content,
-          content_vector: embedding,
-          token_count: estimateTokenCount(sectionData.content),
-          estimated_minutes: sectionData.estimatedMinutes,
-        });
-
-        if (sectionError) {
-          console.error('Section creation error:', sectionError);
-        }
-      }
-    }
-
-    // 3. Bookステータスを完了に更新
-    const { error: updateError } = await supabase
-      .from('books')
-      .update({ processing_status: 'completed' })
-      .eq('id', book.id);
-
-    if (updateError) {
-      console.error('Book status update error:', updateError);
-    }
-
-    console.log('Processing completed successfully!');
-
+    // 即座にレスポンスを返す（処理はフロントから章ごとに呼び出される）
     return NextResponse.json({
       success: true,
       bookId: book.id,
-      message: 'PDF processing completed',
+      totalChapters: chaptersList.length,
+      chapters: chaptersList,
+      message: 'Book created. Start processing chapters.',
     });
   } catch (error) {
     console.error('PDF processing error:', error);
