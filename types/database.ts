@@ -155,6 +155,16 @@ export interface ChatSessionWithMessages extends ChatSession {
   book: Book
 }
 
+export interface SystemPrompt {
+  id: string
+  user_id: string
+  name: string
+  content: string
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
 // API Request/Response Types
 
 export interface PDFProcessingResult {

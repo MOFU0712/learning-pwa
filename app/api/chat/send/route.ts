@@ -91,10 +91,24 @@ export async function POST(request: NextRequest) {
         .join('\n\n---\n\n');
     }
 
-    // LLMプロンプト構築
-    const systemMessage: Message = {
-      role: 'system',
-      content: `あなたは優秀なAIチューターです。学習者の質問に対して、提供された書籍のコンテキストを基に、わかりやすく丁寧に回答してください。
+    // ユーザーのデフォルトプロンプトを取得
+    let promptContent = '';
+    const { data: defaultPrompt } = await supabase
+      .from('system_prompts')
+      .select('content')
+      .eq('user_id', user.id)
+      .eq('is_default', true)
+      .single();
+
+    if (defaultPrompt?.content) {
+      // {context} プレースホルダーを実際のコンテキストで置換
+      promptContent = defaultPrompt.content.replace(
+        '{context}',
+        contextText || '（コンテキストが見つかりませんでした。一般的な知識で回答してください）'
+      );
+    } else {
+      // フォールバック: デフォルトプロンプトがない場合
+      promptContent = `あなたは優秀なAIチューターです。学習者の質問に対して、提供された書籍のコンテキストを基に、わかりやすく丁寧に回答してください。
 
 【回答の方針】
 - コンテキストに含まれる情報を優先的に使用してください
@@ -104,7 +118,13 @@ export async function POST(request: NextRequest) {
 - コンテキストに情報がない場合は、一般的な知識で補完しても構いません（その旨を明記）
 
 【提供されたコンテキスト】
-${contextText || '（コンテキストが見つかりませんでした。一般的な知識で回答してください）'}`,
+${contextText || '（コンテキストが見つかりませんでした。一般的な知識で回答してください）'}`;
+    }
+
+    // LLMプロンプト構築
+    const systemMessage: Message = {
+      role: 'system',
+      content: promptContent,
     };
 
     const userMessage: Message = {

@@ -35,7 +35,10 @@ export class GeminiProvider implements LLMProvider {
     // チャット開始
     const chat = this.model.startChat({
       history,
-      systemInstruction: systemMessage?.content,
+      systemInstruction: systemMessage?.content ? {
+        role: 'user',
+        parts: [{ text: systemMessage.content }],
+      } : undefined,
     });
 
     // ストリーミングレスポンス
@@ -62,7 +65,10 @@ export class GeminiProvider implements LLMProvider {
 
     const chat = this.model.startChat({
       history,
-      systemInstruction: systemMessage?.content,
+      systemInstruction: systemMessage?.content ? {
+        role: 'user',
+        parts: [{ text: systemMessage.content }],
+      } : undefined,
     });
 
     const result = await chat.sendMessage(lastMessage.content);
