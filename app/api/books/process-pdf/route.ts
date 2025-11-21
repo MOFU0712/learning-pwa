@@ -62,51 +62,55 @@ export async function POST(request: NextRequest) {
 あなたはPDF学習教材の構造解析の専門家です。以下のPDFを解析し、学習に最適な形で章とセクションに分割してください。
 
 【解析要件】
-1. PDFから章（Chapter）を抽出
+1. PDFから最初の3章のみを抽出（トークン制限のため）
    - 章番号と章タイトルを識別
-   - 各章の概要（summary）を200文字程度で作成
+   - 各章の概要（summary）を100文字程度で簡潔に作成
 
-2. 各章をセクション（Section）に分割
-   - 1セクション = 5-10分で学習できる単位（1000-2000文字程度）
-   - セクションごとにタイトルをつける
-   - セクションの本文（content）を抽出
+2. 各章を最大3セクションに分割
+   - 1セクション = 5-10分で学習できる単位（800-1500文字程度）
+   - セクションごとに簡潔なタイトルをつける
+   - セクションの本文（content）を抽出（重要な部分のみ）
    - 推定学習時間（分）を計算
 
-3. 出力はJSON形式で以下の構造に従ってください：
+3. **必ず完全なJSONを出力してください**
+   - 途中で切れないように注意
+   - 最後の } まで必ず出力
+   - JSON以外の説明文は一切出力しない
+
+出力JSONフォーマット：
 {
-  "title": "書籍タイトル（PDFから抽出、もしくはユーザー入力のまま）",
-  "author": "著者名（PDFから抽出可能なら）",
-  "totalPages": PDFの総ページ数,
+  "title": "書籍タイトル",
+  "author": "著者名",
+  "totalPages": ページ数,
   "chapters": [
     {
-      "number": 章番号,
+      "number": 1,
       "title": "章タイトル",
-      "summary": "章の概要（200文字程度）",
+      "summary": "100文字以内の概要",
       "sections": [
         {
-          "number": セクション番号（章内での連番）,
+          "number": 1,
           "title": "セクションタイトル",
-          "content": "セクションの本文（元のPDF内容をそのまま）",
-          "estimatedMinutes": 推定学習時間（分）
+          "content": "本文（800-1500文字）",
+          "estimatedMinutes": 7
         }
       ]
     }
   ]
 }
 
-【重要】
-- contentはマークダウン形式で出力してください
-- 図表やコードブロックも可能な限り保持してください
-- セクション分割は自然な区切りで行ってください
-- JSON以外の説明文は出力しないでください
-
-それでは、以下のPDFを解析してください。`;
+**重要**: JSONを途中で切らずに、必ず最後まで完成させてください。`;
 
     console.log('Starting PDF analysis with Gemini...');
 
     // Gemini Flash 2.0でPDF解析
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash-exp',
+      generationConfig: {
+        maxOutputTokens: 8192, // 出力トークン数を増やす
+        temperature: 0.1, // より決定的な出力
+        responseMimeType: 'application/json', // JSON出力を指定
+      },
     });
 
     const result = await model.generateContent([
