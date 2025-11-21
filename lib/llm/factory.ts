@@ -17,7 +17,7 @@ export function createLLMProvider(provider: LLMProviderType): LLMProvider {
   }
 }
 
-// デフォルトプロバイダー（Gemini Flash - コスパ最強）
+// デフォルトプロバイダー（Claude Haiku - 指示追従性が高い）
 export function createDefaultLLMProvider(): LLMProvider {
-  return createLLMProvider('gemini-flash');
+  return createLLMProvider('claude-haiku');
 }

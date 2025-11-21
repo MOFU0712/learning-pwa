@@ -33,7 +33,7 @@ export class ClaudeProvider implements LLMProvider {
 
     const stream = await this.client.messages.stream({
       model: this.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemMessage?.content,
       messages: chatMessages.map(msg => ({
         role: msg.role as 'user' | 'assistant',
@@ -57,7 +57,7 @@ export class ClaudeProvider implements LLMProvider {
 
     const result = await this.client.messages.create({
       model: this.model,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: systemMessage?.content,
       messages: chatMessages.map(msg => ({
         role: msg.role as 'user' | 'assistant',
