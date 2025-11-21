@@ -172,14 +172,15 @@ export async function POST(request: NextRequest) {
 
     // 各問題の review_history 初期エントリを作成
     if (insertedQuestions && insertedQuestions.length > 0) {
+      const today = new Date().toISOString().split('T')[0];
       const historyEntries = insertedQuestions.map((q) => ({
         user_id: user.id,
         question_id: q.id,
-        quality: 0, // 未回答
-        easiness_factor: 2.5, // SM-2 デフォルト
-        interval: 1,
+        self_rating: 3, // 初期値（中間）
+        ease_factor: 2.5, // SM-2 デフォルト
+        interval_days: 1,
         repetitions: 0,
-        next_review_date: new Date().toISOString().split('T')[0], // 今日から復習可能
+        next_review_date: today, // 今日から復習可能
       }));
 
       const { error: historyError } = await supabase
