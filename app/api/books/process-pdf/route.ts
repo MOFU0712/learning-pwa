@@ -34,16 +34,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Downloading PDF from Supabase Storage...');
+    console.log('Downloading PDF from Supabase Storage...', { fileName });
 
     // Supabase StorageからPDFをダウンロード
+    // 注意: サーバー側なのでRLSをバイパスできる
     const { data: pdfBlob, error: downloadError } = await supabase.storage
       .from('pdfs')
       .download(fileName);
 
-    if (downloadError || !pdfBlob) {
-      throw new Error('Failed to download PDF from storage');
+    if (downloadError) {
+      console.error('Download error details:', downloadError);
+      throw new Error(`Failed to download PDF: ${downloadError.message}`);
     }
+
+    if (!pdfBlob) {
+      throw new Error('PDF blob is null');
+    }
+
+    console.log('PDF downloaded successfully, size:', pdfBlob.size);
 
     // PDFをBase64に変換
     const pdfBuffer = await pdfBlob.arrayBuffer();
@@ -113,21 +121,44 @@ export async function POST(request: NextRequest) {
 
     const responseText = result.response.text();
     console.log('Gemini response received, parsing JSON...');
+    console.log('Response preview:', responseText.substring(0, 500));
 
     // JSONをパース（```json ... ```をトリム）
     let jsonText = responseText.trim();
+
+    // コードブロックを削除
     if (jsonText.startsWith('```json')) {
       jsonText = jsonText.substring(7);
-    }
-    if (jsonText.startsWith('```')) {
+    } else if (jsonText.startsWith('```')) {
       jsonText = jsonText.substring(3);
     }
+
     if (jsonText.endsWith('```')) {
       jsonText = jsonText.substring(0, jsonText.length - 3);
     }
+
     jsonText = jsonText.trim();
 
-    const pdfData: PDFProcessingResult = JSON.parse(jsonText);
+    // JSONの開始と終了を探す
+    const jsonStart = jsonText.indexOf('{');
+    const jsonEnd = jsonText.lastIndexOf('}');
+
+    if (jsonStart === -1 || jsonEnd === -1) {
+      console.error('Invalid JSON format - no braces found');
+      console.error('Response text:', responseText);
+      throw new Error('Invalid JSON format in Gemini response');
+    }
+
+    jsonText = jsonText.substring(jsonStart, jsonEnd + 1);
+
+    let pdfData: PDFProcessingResult;
+    try {
+      pdfData = JSON.parse(jsonText);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.error('Attempted to parse:', jsonText.substring(0, 1000));
+      throw new Error('Failed to parse Gemini response as JSON');
+    }
 
     console.log(
       `Parsed PDF: ${pdfData.chapters.length} chapters, ${pdfData.chapters.reduce((sum, ch) => sum + ch.sections.length, 0)} sections`

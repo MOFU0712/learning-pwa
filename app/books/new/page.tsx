@@ -67,7 +67,7 @@ export default function NewBookPage() {
         .replace(/_{2,}/g, '_'); // 連続するアンダースコアを1つに
       const fileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('pdfs')
         .upload(fileName, pdfFile, {
           cacheControl: '3600',
@@ -99,7 +99,10 @@ export default function NewBookPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'アップロードに失敗しました');
+        const errorMsg = errorData.details
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || 'アップロードに失敗しました';
+        throw new Error(errorMsg);
       }
 
       const result = await response.json();
