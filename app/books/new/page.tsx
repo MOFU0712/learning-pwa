@@ -61,7 +61,12 @@ export default function NewBookPage() {
       }
 
       // 1. PDFをSupabase Storageにアップロード
-      const fileName = `${user.id}/${Date.now()}-${pdfFile.name}`;
+      // ファイル名をサニタイズ（日本語などの非ASCII文字を除去）
+      const sanitizedFileName = pdfFile.name
+        .replace(/[^a-zA-Z0-9.-]/g, '_') // 非ASCII文字をアンダースコアに
+        .replace(/_{2,}/g, '_'); // 連続するアンダースコアを1つに
+      const fileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
+
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('pdfs')
         .upload(fileName, pdfFile, {
