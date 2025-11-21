@@ -48,16 +48,48 @@ export async function POST(request: NextRequest) {
       isNewSession = true;
     }
 
+    // セッション情報を取得（要約・学習計画含む）
+    let sessionInfo: {
+      learning_plan: string | null;
+      conversation_summary: string | null;
+      progress_status: string | null;
+      summarized_message_count: number;
+    } | null = null;
+
+    if (!isNewSession) {
+      const { data: sessionData } = await supabase
+        .from('chat_sessions')
+        .select('learning_plan, conversation_summary, progress_status, summarized_message_count')
+        .eq('id', currentSessionId)
+        .single();
+      sessionInfo = sessionData;
+    }
+
     // 過去の会話履歴を取得（ユーザーメッセージ保存前に取得）
     let chatHistory: { role: string; content: string }[] = [];
+    const MAX_RECENT_MESSAGES = 10; // 直近のメッセージ数を制限
+
     if (!isNewSession) {
       const { data: historyData } = await supabase
         .from('chat_messages')
         .select('role, content')
         .eq('session_id', currentSessionId)
-        .order('created_at', { ascending: true })
-        .limit(20);
-      chatHistory = historyData || [];
+        .order('created_at', { ascending: true });
+
+      const allMessages = historyData || [];
+
+      // メッセージが多い場合は、直近のものだけを使用
+      if (allMessages.length > MAX_RECENT_MESSAGES) {
+        chatHistory = allMessages.slice(-MAX_RECENT_MESSAGES);
+
+        // 要約がない場合は古いメッセージから要約を生成（非同期で後から更新）
+        if (!sessionInfo?.conversation_summary && allMessages.length > MAX_RECENT_MESSAGES) {
+          // 要約生成は別途行う（このリクエストではスキップ）
+          console.log(`Session has ${allMessages.length} messages, using last ${MAX_RECENT_MESSAGES}`);
+        }
+      } else {
+        chatHistory = allMessages;
+      }
     }
 
     // ユーザーメッセージをデータベースに保存
@@ -160,6 +192,27 @@ export async function POST(request: NextRequest) {
 ${contextText || '（コンテキストが見つかりませんでした。一般的な知識で回答してください）'}`;
     }
 
+    // セッション情報（学習計画・要約・進捗）があれば追加
+    if (sessionInfo) {
+      let sessionContext = '\n\n---\n【セッション情報】\n';
+
+      if (sessionInfo.learning_plan) {
+        sessionContext += `\n【学習計画】\n${sessionInfo.learning_plan}\n`;
+      }
+
+      if (sessionInfo.progress_status) {
+        sessionContext += `\n【現在の進捗】${sessionInfo.progress_status}\n`;
+      }
+
+      if (sessionInfo.conversation_summary) {
+        sessionContext += `\n【これまでの会話の要約】\n${sessionInfo.conversation_summary}\n`;
+      }
+
+      sessionContext += '\n上記の学習計画と進捗を踏まえて、学習を続けてください。同じ内容を繰り返さないでください。';
+
+      promptContent += sessionContext;
+    }
+
     // LLMプロンプト構築
     const systemMessage: Message = {
       role: 'system',
@@ -225,12 +278,28 @@ ${contextText || '（コンテキストが見つかりませんでした。一�
             console.error('Failed to save AI message:', aiMessageError);
           }
 
-          // セッション更新（最終トピック、理解度は後で実装）
+          // セッション更新
+          const sessionUpdate: Record<string, any> = {
+            current_topic: message.substring(0, 100),
+          };
+
+          // 学習計画を抽出して保存（最初の応答で「今日の学習計画」が含まれる場合）
+          if (fullResponse.includes('【今日の学習計画】') || fullResponse.includes('学習計画')) {
+            const planMatch = fullResponse.match(/【今日の学習計画】[\s\S]*?(?=\n\n[^0-9]|$)/);
+            if (planMatch && !sessionInfo?.learning_plan) {
+              sessionUpdate.learning_plan = planMatch[0].substring(0, 2000); // 最大2000文字
+            }
+          }
+
+          // 進捗状況を抽出（「進捗: X/Y」形式）
+          const progressMatch = fullResponse.match(/進捗[：:]\s*(\d+\/\d+)/);
+          if (progressMatch) {
+            sessionUpdate.progress_status = progressMatch[1];
+          }
+
           await supabase
             .from('chat_sessions')
-            .update({
-              current_topic: message.substring(0, 100),
-            })
+            .update(sessionUpdate)
             .eq('id', currentSessionId);
 
           controller.close();
