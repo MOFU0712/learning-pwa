@@ -57,39 +57,64 @@ export async function POST(request: NextRequest) {
       console.error('Failed to save user message:', userMessageError);
     }
 
-    // セマンティック検索: ユーザーの質問に関連するセクションを取得
-    console.log('Generating query embedding...');
-    const queryEmbedding = await generateEmbedding(message);
-
-    console.log('Searching relevant sections...');
-    const { data: relevantSections, error: searchError } = await supabase.rpc(
-      'match_sections',
-      {
-        query_embedding: queryEmbedding,
-        chapter_id_param: chapterId || null,
-        match_threshold: 0.7,
-        match_count: 5,
-      }
-    );
-
-    if (searchError) {
-      console.error('Semantic search error:', searchError);
-    }
-
-    console.log(`Found ${relevantSections?.length || 0} relevant sections`);
-
     // コンテキスト構築
     let contextText = '';
     const sectionsUsed: string[] = [];
 
-    if (relevantSections && relevantSections.length > 0) {
-      contextText = relevantSections
-        .map((section: any) => {
-          sectionsUsed.push(section.id);
-          return `## ${section.title}\n\n${section.content}`;
-        })
-        .join('\n\n---\n\n');
+    if (chapterId) {
+      // 特定の章が選択されている場合: その章のセクションを全て取得
+      console.log(`Fetching all sections for chapter: ${chapterId}`);
+      const { data: chapterSections, error: sectionsError } = await supabase
+        .from('sections')
+        .select('id, section_number, title, content')
+        .eq('chapter_id', chapterId)
+        .order('section_number', { ascending: true });
+
+      if (sectionsError) {
+        console.error('Chapter sections fetch error:', sectionsError);
+      }
+
+      if (chapterSections && chapterSections.length > 0) {
+        console.log(`Found ${chapterSections.length} sections in chapter`);
+        contextText = chapterSections
+          .map((section: any) => {
+            sectionsUsed.push(section.id);
+            return `## ${section.section_number}. ${section.title}\n\n${section.content}`;
+          })
+          .join('\n\n---\n\n');
+      }
+    } else {
+      // 書籍全体が選択されている場合: セマンティック検索
+      console.log('Generating query embedding...');
+      const queryEmbedding = await generateEmbedding(message);
+
+      console.log('Searching relevant sections across book...');
+      const { data: relevantSections, error: searchError } = await supabase.rpc(
+        'match_sections_by_book',
+        {
+          query_embedding: queryEmbedding,
+          book_id_param: bookId,
+          match_threshold: 0.3,
+          match_count: 5,
+        }
+      );
+
+      if (searchError) {
+        console.error('Semantic search error:', searchError);
+      }
+
+      if (relevantSections && relevantSections.length > 0) {
+        console.log(`Found ${relevantSections.length} relevant sections`);
+        contextText = relevantSections
+          .map((section: any) => {
+            sectionsUsed.push(section.id);
+            return `## ${section.title}\n\n${section.content}`;
+          })
+          .join('\n\n---\n\n');
+      }
     }
+
+    console.log(`Context length: ${contextText.length} chars`);
 
     // ユーザーのデフォルトプロンプトを取得
     let promptContent = '';
