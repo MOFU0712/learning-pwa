@@ -80,3 +80,72 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // 書籍の所有権確認
+    const { data: book, error: bookError } = await supabase
+      .from('books')
+      .select('id, user_id, pdf_storage_path')
+      .eq('id', id)
+      .single();
+
+    if (bookError || !book) {
+      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    }
+
+    if (book.user_id !== user.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    // PDFファイルをストレージから削除
+    if (book.pdf_storage_path) {
+      const { error: storageError } = await supabase.storage
+        .from('books')
+        .remove([book.pdf_storage_path]);
+
+      if (storageError) {
+        console.error('Failed to delete PDF from storage:', storageError);
+        // ストレージ削除に失敗してもDB削除は続行
+      }
+    }
+
+    // 書籍を削除（関連データはCASCADE削除される）
+    const { error: deleteError } = await supabase
+      .from('books')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('Failed to delete book:', deleteError);
+      return NextResponse.json(
+        { error: 'Failed to delete book' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Delete book API error:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to delete book',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 }
+    );
+  }
+}
