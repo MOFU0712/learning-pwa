@@ -4,6 +4,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { generateEmbeddings, estimateTokenCount } from '@/lib/embeddings';
 import type { PDFProcessingResult } from '@/types/database';
 
+// Route Segment Config: 最大実行時間とボディサイズ制限
+export const maxDuration = 300; // 5分（Vercel Pro以上で必要）
+export const dynamic = 'force-dynamic';
+
 // Gemini APIクライアント
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
@@ -19,21 +23,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // FormDataを取得
-    const formData = await request.formData();
-    const title = formData.get('title') as string;
-    const author = formData.get('author') as string;
-    const pdfFile = formData.get('pdf') as File;
+    // JSONボディを取得
+    const body = await request.json();
+    const { title, author, pdfUrl, fileName } = body;
 
-    if (!title || !pdfFile) {
+    if (!title || !pdfUrl) {
       return NextResponse.json(
-        { error: 'Title and PDF file are required' },
+        { error: 'Title and PDF URL are required' },
         { status: 400 }
       );
     }
 
-    // PDFファイルをバイナリに変換
-    const pdfBuffer = await pdfFile.arrayBuffer();
+    console.log('Downloading PDF from Supabase Storage...');
+
+    // Supabase StorageからPDFをダウンロード
+    const { data: pdfBlob, error: downloadError } = await supabase.storage
+      .from('pdfs')
+      .download(fileName);
+
+    if (downloadError || !pdfBlob) {
+      throw new Error('Failed to download PDF from storage');
+    }
+
+    // PDFをBase64に変換
+    const pdfBuffer = await pdfBlob.arrayBuffer();
     const pdfBase64 = Buffer.from(pdfBuffer).toString('base64');
 
     // PDF解析プロンプト
@@ -132,6 +145,7 @@ export async function POST(request: NextRequest) {
         author: pdfData.author || author || null,
         total_pages: pdfData.totalPages || null,
         total_chapters: pdfData.chapters.length,
+        pdf_url: pdfUrl,
         processing_status: 'processing',
       })
       .select()

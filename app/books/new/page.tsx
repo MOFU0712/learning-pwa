@@ -47,16 +47,49 @@ export default function NewBookPage() {
     setError(null);
 
     try {
-      // FormDataを作成
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('author', author);
-      formData.append('pdf', pdfFile);
+      // Supabaseクライアント取得
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
 
-      // PDF処理APIを呼び出し
+      // ユーザー認証確認
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        throw new Error('ログインが必要です');
+      }
+
+      // 1. PDFをSupabase Storageにアップロード
+      const fileName = `${user.id}/${Date.now()}-${pdfFile.name}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('pdfs')
+        .upload(fileName, pdfFile, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(`アップロード失敗: ${uploadError.message}`);
+      }
+
+      // 2. 公開URLを取得
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('pdfs').getPublicUrl(fileName);
+
+      // 3. PDF処理APIを呼び出し（URLのみ送信）
       const response = await fetch('/api/books/process-pdf', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          author,
+          pdfUrl: publicUrl,
+          fileName,
+        }),
       });
 
       if (!response.ok) {
