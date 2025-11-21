@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
 
     // セッション取得または作成
     let currentSessionId = sessionId;
+    let isNewSession = false;
     if (!currentSessionId) {
       const { data: newSession, error: sessionError } = await supabase
         .from('chat_sessions')
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
           user_id: user.id,
           book_id: bookId,
           chapter_id: chapterId || null,
-          llm_provider: 'gemini-flash',
+          llm_provider: 'claude-haiku',
           status: 'active',
         })
         .select()
@@ -44,6 +45,19 @@ export async function POST(request: NextRequest) {
       }
 
       currentSessionId = newSession.id;
+      isNewSession = true;
+    }
+
+    // 過去の会話履歴を取得（ユーザーメッセージ保存前に取得）
+    let chatHistory: { role: string; content: string }[] = [];
+    if (!isNewSession) {
+      const { data: historyData } = await supabase
+        .from('chat_messages')
+        .select('role, content')
+        .eq('session_id', currentSessionId)
+        .order('created_at', { ascending: true })
+        .limit(20);
+      chatHistory = historyData || [];
     }
 
     // ユーザーメッセージをデータベースに保存
@@ -152,28 +166,11 @@ ${contextText || '（コンテキストが見つかりませんでした。一�
       content: promptContent,
     };
 
-    // 過去の会話履歴を取得（今回のメッセージは除外、最新20件まで）
-    // 注意: 上でユーザーメッセージを既に保存しているので、それを除外する
-    const { data: chatHistory } = await supabase
-      .from('chat_messages')
-      .select('role, content')
-      .eq('session_id', currentSessionId)
-      .neq('content', message) // 今回のメッセージを除外
-      .order('created_at', { ascending: true })
-      .limit(20);
-
-    // 会話履歴をMessage形式に変換（最後のメッセージが今回のと同じなら除外）
-    let historyMessages: Message[] = (chatHistory || []).map((msg) => ({
+    // 会話履歴をMessage形式に変換（前半で取得済み）
+    const historyMessages: Message[] = chatHistory.map((msg) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }));
-
-    // 安全のため、最後のメッセージが今回のユーザーメッセージと同じなら除外
-    if (historyMessages.length > 0 &&
-        historyMessages[historyMessages.length - 1].role === 'user' &&
-        historyMessages[historyMessages.length - 1].content === message) {
-      historyMessages = historyMessages.slice(0, -1);
-    }
 
     const userMessage: Message = {
       role: 'user',
