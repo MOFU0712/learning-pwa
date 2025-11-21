@@ -165,7 +165,7 @@ export default function DashboardPage() {
             <CardTitle>クイックアクション</CardTitle>
             <CardDescription>よく使う機能</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
+          <CardContent className="grid gap-4 md:grid-cols-4">
             <Button
               variant="outline"
               className="h-24 flex flex-col gap-2"
@@ -189,6 +189,14 @@ export default function DashboardPage() {
             >
               <span className="text-2xl">📖</span>
               <span>プロジェクト一覧</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-24 flex flex-col gap-2"
+              onClick={() => router.push('/settings/prompts')}
+            >
+              <span className="text-2xl">⚙️</span>
+              <span>プロンプト設定</span>
             </Button>
           </CardContent>
         </Card>
