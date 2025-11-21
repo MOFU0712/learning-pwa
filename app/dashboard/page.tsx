@@ -234,23 +234,23 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen p-4 py-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen p-3 sm:p-4 py-4 sm:py-8">
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-8 flex flex-col">
         {/* ヘッダー */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">ダッシュボード</h1>
-            <p className="text-muted-foreground mt-1">
+        <div className="flex justify-between items-center gap-2 order-1">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-3xl font-bold">ダッシュボード</h1>
+            <p className="text-muted-foreground text-xs sm:text-base mt-1 truncate">
               {user?.email ? `ようこそ、${user.email}さん` : 'ようこそ'}
             </p>
           </div>
-          <Button variant="outline" onClick={handleLogout}>
+          <Button variant="outline" onClick={handleLogout} size="sm" className="shrink-0">
             ログアウト
           </Button>
         </div>
 
-        {/* 今日の復習カード */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* 今日の復習カード - モバイルでは書籍一覧の後に表示 */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 order-3 sm:order-2">
           <Card className="col-span-full md:col-span-1">
             <CardHeader>
               <CardTitle>今日の復習</CardTitle>
@@ -302,59 +302,59 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* クイックアクション */}
-        <Card>
+        {/* クイックアクション - モバイルでは非表示（書籍一覧から操作） */}
+        <Card className="hidden sm:block order-3">
           <CardHeader>
             <CardTitle>クイックアクション</CardTitle>
             <CardDescription>よく使う機能</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-4">
+          <CardContent className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-4">
             <Button
               variant="outline"
-              className="h-24 flex flex-col gap-2"
+              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
               onClick={() => router.push('/review')}
             >
-              <span className="text-2xl">📚</span>
+              <span className="text-lg sm:text-2xl">📚</span>
               <span>復習を始める</span>
             </Button>
             <Button
               variant="outline"
-              className="h-24 flex flex-col gap-2"
+              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
               onClick={() => router.push('/books/new')}
             >
-              <span className="text-2xl">➕</span>
+              <span className="text-lg sm:text-2xl">➕</span>
               <span>書籍を追加</span>
             </Button>
             <Button
               variant="outline"
-              className="h-24 flex flex-col gap-2"
+              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
               onClick={() => {
                 // 書籍一覧セクションまでスクロール
                 document.getElementById('books-section')?.scrollIntoView({ behavior: 'smooth' })
               }}
             >
-              <span className="text-2xl">📖</span>
+              <span className="text-lg sm:text-2xl">📖</span>
               <span>書籍一覧</span>
             </Button>
             <Button
               variant="outline"
-              className="h-24 flex flex-col gap-2"
+              className="h-16 sm:h-24 flex flex-col gap-1 sm:gap-2 text-xs sm:text-sm"
               onClick={() => router.push('/settings/prompts')}
             >
-              <span className="text-2xl">⚙️</span>
+              <span className="text-lg sm:text-2xl">⚙️</span>
               <span>プロンプト設定</span>
             </Button>
           </CardContent>
         </Card>
 
-        {/* 書籍一覧 */}
-        <Card id="books-section">
-          <CardHeader className="flex flex-row items-center justify-between">
+        {/* 書籍一覧 - モバイルでは最初に表示 */}
+        <Card id="books-section" className="order-2 sm:order-4">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <CardTitle>書籍一覧</CardTitle>
-              <CardDescription>AI チューターで学習中の書籍</CardDescription>
+              <CardTitle className="text-lg sm:text-xl">書籍一覧</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">AI チューターで学習中の書籍</CardDescription>
             </div>
-            <Button onClick={() => router.push('/books/new')}>
+            <Button onClick={() => router.push('/books/new')} size="sm" className="w-full sm:w-auto">
               ➕ 新しい書籍を追加
             </Button>
           </CardHeader>
@@ -438,7 +438,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* 最近の活動 */}
-        <Card>
+        <Card className="order-4 sm:order-5">
           <CardHeader>
             <CardTitle>最近の学習記録</CardTitle>
             <CardDescription>直近の活動履歴</CardDescription>

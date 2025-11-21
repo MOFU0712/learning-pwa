@@ -296,26 +296,27 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* ヘッダー */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <Link href="/dashboard" className="text-indigo-600 hover:underline text-sm mb-1 block">
+      <div className="bg-white border-b border-gray-200 px-3 sm:px-6 py-3 sm:py-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* 書籍情報 */}
+          <div className="min-w-0 flex-1">
+            <Link href="/dashboard" className="text-indigo-600 hover:underline text-xs sm:text-sm mb-1 block">
               ← ダッシュボード
             </Link>
-            <h1 className="text-2xl font-bold text-gray-900">{state.book.title}</h1>
+            <h1 className="text-base sm:text-2xl font-bold text-gray-900 truncate">{state.book.title}</h1>
             {state.book.author && (
-              <p className="text-sm text-gray-600">著者: {state.book.author}</p>
+              <p className="text-xs sm:text-sm text-gray-600 truncate">著者: {state.book.author}</p>
             )}
           </div>
 
-          {/* 章選択とセッション終了 */}
-          <div className="flex items-center gap-4">
+          {/* 章選択とアクションボタン */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
             <select
               value={state.selectedChapterId || ''}
               onChange={(e) =>
                 setState((prev) => ({ ...prev, selectedChapterId: e.target.value || null }))
               }
-              className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 sm:flex-none min-w-0 px-2 sm:px-4 py-1.5 sm:py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">全体</option>
               {state.chapters.map((chapter) => (
@@ -330,7 +331,7 @@ export default function ChatPage() {
               <button
                 onClick={handleClearHistory}
                 disabled={isClearingHistory}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+                className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 whitespace-nowrap"
               >
                 {isClearingHistory ? 'クリア中...' : '履歴クリア'}
               </button>
@@ -340,7 +341,7 @@ export default function ChatPage() {
             {sessionId && state.messages.length >= 2 && (
               <button
                 onClick={() => setShowEndSessionModal(true)}
-                className="px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors font-medium"
+                className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors font-medium whitespace-nowrap"
               >
                 学習を終了
               </button>
@@ -350,7 +351,7 @@ export default function ChatPage() {
       </div>
 
       {/* メッセージエリア */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 space-y-4">
         {state.messages.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">💭</div>
@@ -400,23 +401,23 @@ export default function ChatPage() {
       </div>
 
       {/* 入力エリア */}
-      <div className="bg-white border-t border-gray-200 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex gap-4">
+      <div className="bg-white border-t border-gray-200 px-3 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-4xl mx-auto flex gap-2 sm:gap-4">
           <textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="メッセージを入力... (Shift+Enterで改行)"
+            placeholder="メッセージを入力..."
             disabled={isSending}
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-            rows={3}
+            className="flex-1 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+            rows={2}
           />
           <button
             onClick={handleSendMessage}
             disabled={!inputMessage.trim() || isSending}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors h-fit"
+            className="px-4 sm:px-6 py-2 sm:py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium transition-colors h-fit text-sm sm:text-base"
           >
-            {isSending ? '送信中...' : '送信'}
+            {isSending ? '...' : '送信'}
           </button>
         </div>
       </div>
